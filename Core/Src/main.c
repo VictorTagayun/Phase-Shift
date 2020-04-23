@@ -133,6 +133,8 @@ int main(void)
   MX_HRTIM1_Init();
   /* USER CODE BEGIN 2 */
 
+  VoutTarget = 1520;
+
 #ifdef VOUT_TARGET_mV
   {
 	  VoutFeedback_32bit = (uint16_t) (VOUT_TARGET_mV * RDOWN / ( RUP + RDOWN ));
@@ -179,7 +181,7 @@ int main(void)
   //debug_phase = 10590; // 181V @ 500mA
   //debug_phase = 13590; // 227V @ 500mA, 176V @ 600mA
   //debug_phase = 15000; // 192V @ 600mA, ADC = 2616
-  debug_phase = 17000; // 201V @ 1200mA, 193V @ 2000mA, 188V @ 2500mA, 183V @ 3A
+  //debug_phase = 17000; // 201V @ 1200mA, 193V @ 2000mA, 188V @ 2500mA, 183V @ 3A
 					   // 174V @ 4A, 165V @ 5A, 155V @ 6A
   	  	  	  	  	   // 180V = 1890 @ 3.24A
   	  	  	  	  	   // 170V = 1520 @ 4.31A
@@ -189,7 +191,7 @@ int main(void)
   	  	  	  	  	   // 220V = 3077 @ 3.0A
   	  	  	  	  	   // 190V = 2700 @ 6A
   	  	  	  	  	   // 180V = 2400 @ 7A
-  VoutTarget = 2400; // 180
+  //VoutTarget = 2400; // 180
 
   // Low power Board
   /*
@@ -210,11 +212,17 @@ int main(void)
   operationmode == 0 // start-up
   operationmode == 1 // close loop, dont use
   operationmode == 2 // start up until vfeed
-  operationmode == 3 // debug etc
+  operationmode == 3 // debug = slowly increase duty/phase until a certain value
+  operationmode == 4 // debug = fix dutycycle/phase
   */
-  operationmode = 0;
+  operationmode = 3;
 
   HRTIM1_Start_Output();
+
+  debug_phase = 16; // start and minimum, alreadu in the IOC
+  HAL_Delay(5000);
+  debug_phase = 24000; // Vout = 5.88V / Vfeed = 2.88V (3627)
+
 
   /* USER CODE END 2 */
 
@@ -400,7 +408,7 @@ static void MX_HRTIM1_Init(void)
     Error_Handler();
   }
   pTimeBaseCfg.Period = 54400;
-  pTimeBaseCfg.RepetitionCounter = 2;
+  pTimeBaseCfg.RepetitionCounter = 10;
   pTimeBaseCfg.PrescalerRatio = HRTIM_PRESCALERRATIO_MUL16;
   pTimeBaseCfg.Mode = HRTIM_MODE_CONTINUOUS;
   if (HAL_HRTIM_TimeBaseConfig(&hhrtim1, HRTIM_TIMERINDEX_MASTER, &pTimeBaseCfg) != HAL_OK)
@@ -618,6 +626,7 @@ static void HRTIM1_Start_Output(void)
 
 	HAL_HRTIM_WaveformOutputStart(&hhrtim1, HRTIM_OUTPUT_TA1 | HRTIM_OUTPUT_TA2 | HRTIM_OUTPUT_TB1 | HRTIM_OUTPUT_TB2);
 	HAL_HRTIM_WaveformCountStart_IT(&hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B);
+
 }
 
 int32_t my_PID_Controller(void)
@@ -694,7 +703,7 @@ int32_t my_PID_Controller(void)
 	  }
   }
 
-  if (operationmode == 3) // debug etc
+  if (operationmode == 3) // debug = slowly increase duty/phase until a certain value
   {
 	  if ( phase_cntr < debug_phase)
 	  {
@@ -703,9 +712,9 @@ int32_t my_PID_Controller(void)
 	  }
   }
 
-  if (operationmode == 4) // shutdown after some time
+  if (operationmode == 4) // debug = fix duty cycle/phase
   {
-
+	  pid_out = debug_phase;
   }
 
   // limit the phase
