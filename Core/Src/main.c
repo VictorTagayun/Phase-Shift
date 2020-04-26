@@ -41,9 +41,10 @@
 #define RUP   2000 // ohms
 #define RDOWN 2000 // ohms
 //#define MAX_PHASE 27200 // half of the period
-#define MAX_PHASE 25000
+#define MAX_PHASE 26500
 #define MIN_PHASE 16
 #define SAT_LIMIT 21888
+#define NUM_REPETITION 0
 
 /* USER CODE END PD */
 
@@ -68,7 +69,7 @@ static uint16_t phase_cntr, debug_phase;
 static int32_t Kp;
 static int32_t Ki;
 static int32_t Kd;
-static int8_t operationmode;
+static int8_t operationmode, direction = 0, repetition_cntr = 0;
 static int32_t Int_term_Buck;
 static uint32_t CTMin;
 static uint32_t CTMax;
@@ -87,8 +88,8 @@ volatile int32_t errorRate;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_LPUART1_UART_Init(void);
-static void MX_ADC2_Init(void);
 static void MX_HRTIM1_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
 static void HRTIM1_Start_Output(void);
@@ -129,11 +130,9 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_LPUART1_UART_Init();
-  MX_ADC2_Init();
   MX_HRTIM1_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
-
-  VoutTarget = 1520;
 
 #ifdef VOUT_TARGET_mV
   {
@@ -203,9 +202,18 @@ int main(void)
   debug_phase = 17000; // Vout = 4.70V / Vfeed = 2.33V (2849)
   debug_phase = 19000; // Vout = 5.44V / Vfeed = 2.71V (3355)
   debug_phase = 20000; // Vout = 5.88V / Vfeed = 2.88V (3627)
+  VoutTarget = 1948; // 3.07V
+  VoutTarget = 2022; // 3.16V
+  VoutTarget = 2333; // 3.66V
   VoutTarget = 2389; // 3.89
+  VoutTarget = 2740; // 4.4V
+  VoutTarget = 2828; // 4.52V
   VoutTarget = 2849; // 4.64
   VoutTarget = 3049; // 4.64
+  VoutTarget = 3009; // 4.76V
+  VoutTarget = 3157; // 5.00V
+  VoutTarget = 3196; // 5.11V
+  VoutTarget = 3215; // 5.16V
   */
 
   /*
@@ -214,15 +222,18 @@ int main(void)
   operationmode == 2 // start up until vfeed
   operationmode == 3 // debug = slowly increase duty/phase until a certain value
   operationmode == 4 // debug = fix dutycycle/phase
+  operationmode == 9 // phase up/down
   */
-  operationmode = 3;
+  operationmode = 9;
+
+  debug_phase = 16; // start and minimum, already in the IOC
+  VoutTarget = 3157; // 5.00V
+  VoutTarget = 1948; // 3.07V
 
   HRTIM1_Start_Output();
 
-  debug_phase = 16; // start and minimum, alreadu in the IOC
   HAL_Delay(5000);
-  debug_phase = 24000; // Vout = 5.88V / Vfeed = 2.88V (3627)
-
+  //debug_phase = 21800; // Vout = 5.88V / Vfeed = 2.88V (3627)
 
   /* USER CODE END 2 */
 
@@ -311,7 +322,7 @@ static void MX_ADC2_Init(void)
   /** Common config 
   */
   hadc2.Instance = ADC2;
-  hadc2.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV4;
   hadc2.Init.Resolution = ADC_RESOLUTION_12B;
   hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc2.Init.GainCompensation = 0;
@@ -351,7 +362,6 @@ static void MX_ADC2_Init(void)
 
   /* Run the ADC calibration in single-ended mode */
   HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
-
   /* Start ADC1 Injected Conversions */
   HAL_ADCEx_InjectedStart_IT(&hadc2);
 
@@ -398,7 +408,7 @@ static void MX_HRTIM1_Init(void)
     Error_Handler();
   }
   pADCTriggerCfg.UpdateSource = HRTIM_ADCTRIGGERUPDATE_MASTER;
-  pADCTriggerCfg.Trigger = HRTIM_ADCTRIGGEREVENT24_MASTER_PERIOD;
+  pADCTriggerCfg.Trigger = HRTIM_ADCTRIGGEREVENT24_MASTER_CMP2;
   if (HAL_HRTIM_ADCTriggerConfig(&hhrtim1, HRTIM_ADCTRIGGER_2, &pADCTriggerCfg) != HAL_OK)
   {
     Error_Handler();
@@ -408,7 +418,7 @@ static void MX_HRTIM1_Init(void)
     Error_Handler();
   }
   pTimeBaseCfg.Period = 54400;
-  pTimeBaseCfg.RepetitionCounter = 10;
+  pTimeBaseCfg.RepetitionCounter = 1;
   pTimeBaseCfg.PrescalerRatio = HRTIM_PRESCALERRATIO_MUL16;
   pTimeBaseCfg.Mode = HRTIM_MODE_CONTINUOUS;
   if (HAL_HRTIM_TimeBaseConfig(&hhrtim1, HRTIM_TIMERINDEX_MASTER, &pTimeBaseCfg) != HAL_OK)
@@ -425,7 +435,7 @@ static void MX_HRTIM1_Init(void)
   pTimerCfg.StartOnSync = HRTIM_SYNCSTART_DISABLED;
   pTimerCfg.ResetOnSync = HRTIM_SYNCRESET_DISABLED;
   pTimerCfg.DACSynchro = HRTIM_DACSYNC_NONE;
-  pTimerCfg.PreloadEnable = HRTIM_PRELOAD_ENABLED;
+  pTimerCfg.PreloadEnable = HRTIM_PRELOAD_DISABLED;
   pTimerCfg.UpdateGating = HRTIM_UPDATEGATING_INDEPENDENT;
   pTimerCfg.BurstMode = HRTIM_TIMERBURSTMODE_MAINTAINCLOCK;
   pTimerCfg.RepetitionUpdate = HRTIM_UPDATEONREPETITION_ENABLED;
@@ -439,8 +449,12 @@ static void MX_HRTIM1_Init(void)
   {
     Error_Handler();
   }
+  pCompareCfg.CompareValue = 1000;
+  if (HAL_HRTIM_WaveformCompareConfig(&hhrtim1, HRTIM_TIMERINDEX_MASTER, HRTIM_COMPAREUNIT_2, &pCompareCfg) != HAL_OK)
+  {
+    Error_Handler();
+  }
   pTimeBaseCfg.RepetitionCounter = 0;
-  pTimeBaseCfg.Mode = HRTIM_MODE_SINGLESHOT_RETRIGGERABLE;
   if (HAL_HRTIM_TimeBaseConfig(&hhrtim1, HRTIM_TIMERINDEX_TIMER_A, &pTimeBaseCfg) != HAL_OK)
   {
     Error_Handler();
@@ -458,8 +472,6 @@ static void MX_HRTIM1_Init(void)
   pTimerCfg.DMADstAddress = 0x0000;
   pTimerCfg.DMASize = 0x1;
   pTimerCfg.InterleavedMode = HRTIM_INTERLEAVED_MODE_DUAL;
-  pTimerCfg.PreloadEnable = HRTIM_PRELOAD_DISABLED;
-  pTimerCfg.RepetitionUpdate = HRTIM_UPDATEONREPETITION_DISABLED;
   pTimerCfg.PushPull = HRTIM_TIMPUSHPULLMODE_DISABLED;
   pTimerCfg.FaultEnable = HRTIM_TIMFAULTENABLE_NONE;
   pTimerCfg.FaultLock = HRTIM_TIMFAULTLOCK_READWRITE;
@@ -467,7 +479,7 @@ static void MX_HRTIM1_Init(void)
   pTimerCfg.DelayedProtectionMode = HRTIM_TIMER_A_B_C_DELAYEDPROTECTION_DISABLED;
   pTimerCfg.UpdateTrigger = HRTIM_TIMUPDATETRIGGER_NONE;
   pTimerCfg.ResetTrigger = HRTIM_TIMRESETTRIGGER_MASTER_PER;
-  pTimerCfg.ResetUpdate = HRTIM_TIMUPDATEONRESET_DISABLED;
+  pTimerCfg.ResetUpdate = HRTIM_TIMUPDATEONRESET_ENABLED;
   if (HAL_HRTIM_WaveformTimerConfig(&hhrtim1, HRTIM_TIMERINDEX_TIMER_A, &pTimerCfg) != HAL_OK)
   {
     Error_Handler();
@@ -475,12 +487,12 @@ static void MX_HRTIM1_Init(void)
   pTimerCfg.DMASrcAddress = 0x0000;
   pTimerCfg.DMADstAddress = 0x0000;
   pTimerCfg.DMASize = 0x1;
-  pTimerCfg.ResetTrigger = HRTIM_TIMRESETTRIGGER_MASTER_CMP1;
+  pTimerCfg.ResetTrigger = HRTIM_TIMRESETTRIGGER_MASTER_PER|HRTIM_TIMRESETTRIGGER_MASTER_CMP1;
   if (HAL_HRTIM_WaveformTimerConfig(&hhrtim1, HRTIM_TIMERINDEX_TIMER_B, &pTimerCfg) != HAL_OK)
   {
     Error_Handler();
   }
-  pDeadTimeCfg.Prescaler = HRTIM_TIMDEADTIME_PRESCALERRATIO_MUL2;
+  pDeadTimeCfg.Prescaler = HRTIM_TIMDEADTIME_PRESCALERRATIO_MUL4;
   pDeadTimeCfg.RisingValue = 500;
   pDeadTimeCfg.RisingSign = HRTIM_TIMDEADTIME_RISINGSIGN_POSITIVE;
   pDeadTimeCfg.RisingLock = HRTIM_TIMDEADTIME_RISINGLOCK_WRITE;
@@ -498,7 +510,7 @@ static void MX_HRTIM1_Init(void)
     Error_Handler();
   }
   pOutputCfg.Polarity = HRTIM_OUTPUTPOLARITY_HIGH;
-  pOutputCfg.SetSource = HRTIM_OUTPUTSET_MASTERPER;
+  pOutputCfg.SetSource = HRTIM_OUTPUTSET_TIMPER;
   pOutputCfg.ResetSource = HRTIM_OUTPUTRESET_TIMCMP1;
   pOutputCfg.IdleMode = HRTIM_OUTPUTIDLEMODE_NONE;
   pOutputCfg.IdleLevel = HRTIM_OUTPUTIDLELEVEL_INACTIVE;
@@ -693,14 +705,19 @@ int32_t my_PID_Controller(void)
 
   if (operationmode == 2) // start up until vfeed
   {
-	  if (error <= 10)
+	  if (error >= 5)
 	  {
-		  if ( phase_cntr < debug_phase)
-		  {
-			  phase_cntr++;
-			  pid_out = phase_cntr;
-		  }
-	  }
+		  phase_cntr++;
+		  pid_out = phase_cntr;
+		  // do not use below
+//		  if ( phase_cntr < debug_phase)
+//		  {
+//			  phase_cntr++;
+//			  pid_out = phase_cntr;
+//		  }
+	  } else
+		  while(1);
+
   }
 
   if (operationmode == 3) // debug = slowly increase duty/phase until a certain value
@@ -715,6 +732,39 @@ int32_t my_PID_Controller(void)
   if (operationmode == 4) // debug = fix duty cycle/phase
   {
 	  pid_out = debug_phase;
+  }
+
+  if (operationmode == 9) // phase up/down
+  {
+
+	  if (repetition_cntr != NUM_REPETITION)
+	  {
+		  repetition_cntr++;
+	  } else
+	  {
+		  if (direction == 0)
+		  {
+			  phase_cntr++;
+			  if ( phase_cntr >= MAX_PHASE)
+			  {
+				  direction = 1;
+				  //HAL_HRTIM_WaveformCountStop_IT(&hhrtim1, HRTIM_TIMERID_MASTER | HRTIM_TIMERID_TIMER_A | HRTIM_TIMERID_TIMER_B);
+			  }
+			  pid_out = phase_cntr;
+		  }
+
+		  if (direction == 1)
+		  {
+			  phase_cntr--;
+			  if ( phase_cntr <= MIN_PHASE)
+			  {
+				  direction = 0;
+			  }
+			  pid_out = phase_cntr;
+		  }
+
+		  repetition_cntr = 0;
+	  }
   }
 
   // limit the phase
