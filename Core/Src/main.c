@@ -642,35 +642,18 @@ int32_t my_PID_Controller(void)
   if (operationmode == 1) // close loop
   {
 
-//	  errorSum = errorSum + error * 2;
-//	  errorRate = (error - last_error)/2;
-
-	errorProp = (Kp * error) / 10;
-	errorSum = errorSum + ((Ki * error) / 10);
+	errorSum = errorSum + error * 2;
+	errorRate = (error - last_error)/2;
 
 	// check if the change is so much to prevent oscillations, see below "pid_out_diff"
 	pid_out_last = pid_out;
 
-	if (errorSum > SAT_LIMIT)
-	{
-	  errorSum = SAT_LIMIT;
-	}
-	if (errorSum < -(SAT_LIMIT))
-	{
-	  errorSum = -(SAT_LIMIT);
-	}
-
-	// my understanding
-	//pid_out = Kp * error + errorSum * Ki + Kd * errorRate;
-
 	// from FW
-	/*
 	seterr = (-Kp * error) / 200;
 	Int_term_Buck = Int_term_Buck + ((-Ki * error) / 200);
 	pid_out = seterr + Int_term_Buck;
-	*/
-	pid_out =  errorProp + errorSum;
-
+	
+	
 	// check if the change is so much to prevent oscillations, see above "pid_out_last"
 	pid_out_diff = pid_out - pid_out_last;
 
@@ -749,17 +732,6 @@ int32_t my_PID_Controller(void)
 	  }
   }
 
-  // limit the phase
-  if (pid_out >= MAX_PHASE)
-  {
-    pid_out = MAX_PHASE;
-  }
-
-  if (pid_out < MIN_PHASE)
-  {
-    pid_out = MIN_PHASE;
-  }
-
   // DAC debug
 //  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, VoutConversion);	// PA4
 //  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, pid_out+2048);		// PA5
@@ -767,65 +739,6 @@ int32_t my_PID_Controller(void)
 
   return  pid_out;
 }
-
-//int32_t temp_my_PID_Controller(void)
-//{
-//
-//  VoutMeasured = HAL_ADCEx_InjectedGetValue(&hadc2, ADC_INJECTED_RANK_1);
-//
-//  last_error = error;
-//  error = (int32_t) VoutTarget - (int32_t ) VoutMeasured;
-//  errorSum = errorSum + error * 2;
-//  errorRate = (error - last_error)/2;
-//
-//  pid_out_last = pid_out;
-//
-//  if (operationmode == 0) // start-up
-//  {
-//	  period_cntr++;
-//	  pid_out = period_cntr;
-//	  if (error <= 10)
-//		  operationmode = 1;
-//	  errorSum = 0;
-//  }
-//
-//  if (operationmode == 1) // close loop
-//  {
-//	  if (errorSum > SAT_LIMIT)
-//	    {
-//	  	  errorSum = SAT_LIMIT;
-//	    }
-//	    if (errorSum < -(SAT_LIMIT))
-//	    {
-//	  	  errorSum = -(SAT_LIMIT);
-//	    }
-//
-//	    pid_out = Kp * error + errorSum * Ki + Kd * errorRate;
-//  }
-//
-//  if (operationmode == 3) // others
-//  {
-//
-//  }
-//
-////  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R, VoutMeasured);	// PA4
-////  HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, error+2048);		// PA5
-////  HAL_DAC_SetValue(&hdac2, DAC_CHANNEL_1, DAC_ALIGN_12B_R, errorSum>>2);	// PA6
-//
-//  if (pid_out >= MAX_DUTY)
-//  {
-//    pid_out = MAX_DUTY;
-//  }
-//
-//  if (pid_out <= MIN_DUTY)
-//  {
-//    pid_out = MIN_DUTY;
-//  }
-//
-//  pid_out_diff = pid_out - pid_out_last;
-//
-//  return  pid_out;
-//}
 
 /* USER CODE END 4 */
 
