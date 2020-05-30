@@ -636,7 +636,6 @@ int32_t my_PID_Controller(void)
 	  pid_out = phase_cntr;
 	  if (error <= 5)
 		  operationmode = 1;
-	  errorSum = 0;
   }
 
   if (operationmode == 1) // close loop
